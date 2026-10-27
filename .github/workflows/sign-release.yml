@@ -1,7 +1,7 @@
 # BUG-158 (CONTROL ruling B, 2026-10-27): QGS releases are signed keyless here. This repo holds only this workflow: no
 # code, no key. A dispatch names one release file and its sha256; GitHub's OIDC identity for this workflow on main gets
 # a short-lived Sigstore certificate (public good, logged in Rekor) and signs an in-toto statement whose one subject is
-# that file at that digest. QGS installs pin this repo, this workflow, refs/heads/main, the GitHub issuer, a
+# that file at that digest (and, for a zip, its bill of materials' sha256). QGS installs pin this repo, this workflow, refs/heads/main, the GitHub issuer, a
 # GitHub-hosted runner and the predicate type below (qgs-client scripts/lib/keyless.js), so main and the right to
 # dispatch ARE the signing authority: main is protected, and only the release seat's account may dispatch.
 name: sign-release
@@ -16,6 +16,10 @@ on:
       sha256:
         description: The file's sha256, 64 lower-case hex characters
         required: true
+      sbom_sha256:
+        description: For a release zip, the sha256 of its bill of materials (sbom.json), signed into the statement; empty for none
+        required: false
+        default: ''
 
 permissions: {}
 
@@ -33,10 +37,12 @@ jobs:
         env:
           NAME: ${{ inputs.name }}
           SHA: ${{ inputs.sha256 }}
+          SBOM: ${{ inputs.sbom_sha256 }}
         run: |
           [[ "$NAME" =~ ^qgs-[0-9]+\.[0-9]+\.[0-9]+\.zip$ || "$NAME" =~ ^qgs-release-list-[0-9]+\.[0-9]+\.[0-9]+\.json$ ]] || { echo "refused: $NAME is not a QGS release file name"; exit 1; }
           [[ "$SHA" =~ ^[0-9a-f]{64}$ ]] || { echo "refused: the sha256 is not 64 lower-case hex characters"; exit 1; }
-          jq -n --arg name "$NAME" --arg sha "$SHA" '{name: $name, sha256: $sha}' > predicate.json
+          [[ -z "$SBOM" || ( "$SBOM" =~ ^[0-9a-f]{64}$ && "$NAME" == *.zip ) ]] || { echo "refused: sbom_sha256 is given only for a release zip, as 64 lower-case hex characters"; exit 1; }
+          jq -n --arg name "$NAME" --arg sha "$SHA" --arg sbom "$SBOM" '{name: $name, sha256: $sha} + (if $sbom == "" then {} else {sbom_sha256: $sbom} end)' > predicate.json
       - name: Sign
         id: attest
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
