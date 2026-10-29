@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       name:
-        description: The release file name the statement signs (qgs-<version>.zip or qgs-release-list-<version>.json)
+        description: The release file name the statement signs (qgs-<version>.zip, qgs-release-list-<version>.json or qgs-channel-<version>.json)
         required: true
       sha256:
         description: The file's sha256, 64 lower-case hex characters
@@ -39,7 +39,7 @@ jobs:
           SHA: ${{ inputs.sha256 }}
           SBOM: ${{ inputs.sbom_sha256 }}
         run: |
-          [[ "$NAME" =~ ^qgs-[0-9]+\.[0-9]+\.[0-9]+\.zip$ || "$NAME" =~ ^qgs-release-list-[0-9]+\.[0-9]+\.[0-9]+\.json$ ]] || { echo "refused: $NAME is not a QGS release file name"; exit 1; }
+          [[ "$NAME" =~ ^qgs-[0-9]+\.[0-9]+\.[0-9]+\.zip$ || "$NAME" =~ ^qgs-release-list-[0-9]+\.[0-9]+\.[0-9]+\.json$ || "$NAME" =~ ^qgs-channel-[0-9]+\.[0-9]+\.[0-9]+\.json$ ]] || { echo "refused: $NAME is not a QGS release file name"; exit 1; }
           [[ "$SHA" =~ ^[0-9a-f]{64}$ ]] || { echo "refused: the sha256 is not 64 lower-case hex characters"; exit 1; }
           [[ -z "$SBOM" || ( "$SBOM" =~ ^[0-9a-f]{64}$ && "$NAME" == *.zip ) ]] || { echo "refused: sbom_sha256 is given only for a release zip, as 64 lower-case hex characters"; exit 1; }
           jq -n --arg name "$NAME" --arg sha "$SHA" --arg sbom "$SBOM" '{name: $name, sha256: $sha} + (if $sbom == "" then {} else {sbom_sha256: $sbom} end)' > predicate.json
